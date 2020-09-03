@@ -1,4 +1,4 @@
 Client,IP Addr,Port
 Pulse Analyser,192.168.170.85,
-GUI,192.168.170.100,
-Server,192.168.170.100,5555
+GUI,127.0.0.1,
+Server,127.0.0.1,6666
