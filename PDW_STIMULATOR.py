@@ -150,7 +150,8 @@ def send_pdws(msg):
     print('#### Sending PDW ####')
     # connect to the server on local computer
     s.connect(('localhost', port))
-    s.send(b'StartPulseAnalysis')
+    s.send(b'PulseAnalyser')
+    time.sleep(1)
     for i in tqdm(range(0, 30)):
         index = i * 4 * 2 * 50
         bytes_to_send = b'\xf0' + msg[index: index + 4 * 2 * 50]

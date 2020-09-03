@@ -53,12 +53,13 @@ def Plot_DTOA(DTOA,x_lim2):
     if(x_lim2 == 0):
         x_lim2 = 100
     x = [*range(0, DTOA.shape[0], 1)]  
-    plt.step(x,DTOA/DTOA.max())
+   # plt.step(x,DTOA/DTOA.max())
+    plt.step(x, DTOA)
     plt.title('DTOA vs Pulse Count')
     plt.ylabel('DTOA (micro sec)')
     plt.xlabel('Pulse Count->')
     plt.xlim(0,x_lim2)
-    plt.ylim(0,1.2)
+    plt.ylim(DTOA.min() * 0.8,DTOA.max()*1.2)
     plt.show()
 #######################################################################################################################
 Category = {
@@ -135,6 +136,7 @@ def ClassifyPRI(model, DTOA):
             print("Staggger PRI",round(PRI,2))
             PRI = np.array(PRI*1000,dtype= '>u4')            
             TrackData = TrackData + PRI.tobytes()
+    print(DTOA[0:10])
     Plot_DTOA(DTOA,100)
     Plot_DTOA_Hist(DTOA)
     return TrackData
@@ -173,8 +175,17 @@ def Extract_PDW(bytes_array):
 #Load the model in memory
 model = tf.keras.models.load_model('pulseanalyser_1000_01_09_20.h5')
 sel = selectors.DefaultSelector()
-host = 'localhost'  # Standard loopback interface address (localhost)
-port = 6666        # Port to listen on (non-privileged ports are > 1023)
+#host = socket.gethostname()
+#IPAddr = socket.gethostbyname(host)
+#print('####',host)
+#print('$$$$',IPAddr)
+GUI_Client_Conn_Status = False
+GUI_IPAddr = ('127.0.0.1', 5410)  # dummy Values
+GUI_Port = 5410  # Dummy Values
+IP_PulseAnalyser = (Ip_info['IP Addr'][0],5555)
+host =  IP_Server # Standard loopback interface address (localhost)
+port = Port_Server        # Port to listen on (non-privileged ports are > 1023)
+#GUI_IPAddr = host
 lsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 lsock.bind((host, port))
 lsock.listen()
@@ -221,89 +232,100 @@ GUI_Client_Conn_Status = False
 Pulse_Analysis_Flag = False
 #######################################################################################################################
 while True:
-    events = sel.select(timeout=None)
+    try:
+        events = sel.select(timeout=1)
+    except:
+        print("error")
+    #events = sel.select(timeout=None)
     for key, mask in events:
-        if key.data is None:
-            conn, addr1 = accept_wrapper(key.fileobj)
-        else: 
-            sock = key.fileobj
-            data = key.data
-            #data = service_connection(key, mask)
-            if mask & selectors.EVENT_READ:
-                    recv_data = sock.recv(5000)  # Should be ready to read 5000
-                    if recv_data :
-                        data.inb = recv_data
-                        CmdByte = recv_data[0]
-                        #print('type of recv_data is',data.inb)
-                       # dataset1 = Bytes_to_int32(recv_data)
-                       # print('Radar Type is',ClassifyPRI(model,dataset1))
-                       # print('LENGTH OF MESSAGE IS',len(data.inb))
-                       # print(data.inb)
-                        if(recv_data[0] == 240):   #PDWs Start of Byte
-                        #if(CmdByte == b'\xf0'):   #PDWs Start of Byte
-                            if(Pulse_Analysis_Flag == True):                             
-                                #print('Length of PDWs',int(len(recv_data)/(4*2)))
-                                PDW1, PDW2 = Extract_PDW(recv_data[1:])                                
-                                TOA = np.concatenate((TOA,PDW2),axis = 0)
-                                #RAW_DTOA = np.concatenate((RAW_DTOA,PDW2),axis = 0)
-                              #  print('Number of PDWs Accumulated',TOA.shape[0])
-                                if(TOA.shape[0] >= 300):
-                                    RAW_DTOA = np.empty(TOA.shape[0]-1)
-                                #    for i in range(0,TOA.shape[0]-1):
-                                 #       RAW_DTOA[i] = TOA[i+1] - TOA[i]
-                                    RAW_DTOA = TOA
-                                  #  print(RAW_DTOA)
-                                    #Plot_DTOA(RAW_DTOA, 100)
-                                    #Plot_DTOA_Hist(RAW_DTOA)
-                                    DTOA, xx = removeOutliers(RAW_DTOA,1,15,85)
-                                    #DTOA = RAW_DTOA
-                                    #print(DTOA)
-                                   # DTOA = DTOA / 10
-                                    if(len(DTOA) > 1000):                                        
-                                        DataSet = np.array(DTOA[0:1000], dtype = 'u4')
-                                        #print(DataSet.mean())
-                                        Plot_DTOA(RAW_DTOA, 100)
-                                        Plot_DTOA_Hist(RAW_DTOA)
+        try:
+            if key.data is None:
+                conn, addr1 = accept_wrapper(key.fileobj)
+            else:
+                sock = key.fileobj
+                data = key.data
+                #data = service_connection(key, mask)
+                if mask & selectors.EVENT_READ:
+                        recv_data = sock.recv(5000)  # Should be ready to read 5000
+                        if recv_data :
+                            data.inb = recv_data
+                            CmdByte = recv_data[0]
 
-                                        TrackData = ClassifyPRI(model,DataSet)
-                                        print('PRI Category is',TrackData)
-                                        TOA = np.empty(0,dtype = 'u4')  
+                            if (GUI_Client_Conn_Status == True) and (recv_data != GUI_CONNECT):
+                               # print('GUI Connected Data Received from Pulse Analyser')
+                                if(recv_data[0] == 240):   #PDWs Start of Byte
+                                    #if(CmdByte == b'\xf0'):   #PDWs Start of Byte
+                                    if(Pulse_Analysis_Flag == True):
+                                        #print('Length of PDWs',int(len(recv_data)/(4*2)))
+                                        PDW1, PDW2 = Extract_PDW(recv_data[1:])
+                                        TOA = np.concatenate((TOA,PDW2),axis = 0)
+                                        if(TOA.shape[0] >= 300):
+                                            RAW_DTOA = np.empty(TOA.shape[0]-1)
+                                            RAW_DTOA = TOA
+                                            DTOA, xx = removeOutliers(RAW_DTOA,1,15,85)
 
-                        if (recv_data == PULSEANALYSER):
-                            sock_pulse_analyser = key.fileobj
-                            addr_pulse_analyser = key.data.addr
-                            PulseAnalyser_Client_Conn_Status = True
-                            print('Pulse Analyser Connected')
-                        if (recv_data == GUI_CONNECT):
-                            sock_gui = key.fileobj
-                            addr_gui = key.data.addr
-                            GUI_Client_Conn_Status = True
-                            print('GUI Connected')
-                            if(PulseAnalyser_Client_Conn_Status == True):
-                                sock.send(b'Connection Established with Pulse Analyser\n\r')
-                            else :
-                                 sock.send(b'Connection with Pulse Analyser Failed\n\r')
-                        if (recv_data == START_PULSE_ANALYSIS):
-                            print('Pulse Analysis Command')
-                            Pulse_Analysis_Flag = True
-                            TOA = np.empty(0,dtype = 'u4')  
-                            ###### Pulse Analysis Command to be sent to Pulse Analyser
-                            #sock_pulse_analyser.send(b'Start Pulse Analysis Command Received\n\r')
-                        if (recv_data == CAPTURE_PDW):
-                            print('Capture PDW Command')
-                            sock_pulse_analyser.send(b'Capture PDW Command Received\n\r')
-                        #text =  (len(data.inb)).to_bytes(4, byteorder="big", signed=False)
-                        #sock.send(bytes(text))
-                    else:
-                        print('closing connection to', data.addr)
-                        if(data.addr[0] == IP_PulseAnalyser):
-                            PulseAnalyser_Client_Conn_Status = False
-                            Pulse_Analysis_Flag = False
-                            print('PulseAnalyser_Client_Conn_Status',PulseAnalyser_Client_Conn_Status)
-                        elif (data.addr[0] == IP_Gui):
-                            GUI_Client_Conn_Status = False
-                            Pulse_Analysis_Flag = False
-                            print('GUI_Client_Conn_Status',GUI_Client_Conn_Status)
-                        sel.unregister(sock)
-                        sock.close()
+                                            if(len(DTOA) > 1000):
+                                                DataSet = np.array(DTOA[0:1000], dtype = 'u4')
+                                                TrackData = ClassifyPRI(model,DataSet)
+                                                GUI_sock.send(TrackData)
+                                                print('PRI Category is',TrackData)
+                                                TOA = np.empty(0,dtype = 'u4')
+                            else:
+                                print('######  GUI Link Down  #######\n')
+
+                            if (recv_data == PULSEANALYSER):
+                                IP_PulseAnalyser = data.addr
+                                sock_pulse_analyser = sock
+                                #addr_pulse_analyser = key.data.addr
+                                PulseAnalyser_Client_Conn_Status = True
+                                print('Pulse Analyser Connected',IP_PulseAnalyser)
+
+                            if (recv_data == GUI_CONNECT):
+                                if ((GUI_Client_Conn_Status == False) or (data.addr == GUI_IPAddr)):
+                                    GUI_IPAddr = data.addr
+                                    GUI_sock = sock
+                                    GUI_Client_Conn_Status = True
+                                    print('GUI Connected',GUI_IPAddr)
+                                    if(PulseAnalyser_Client_Conn_Status == True):
+                                        GUI_sock.send(b'Connection Established with Pulse Analyser\n\r')
+                                    else :
+                                        GUI_sock.send(b'Connection with Pulse Analyser Failed\n\r')
+                                else:
+                                    sel.unregister(sock)
+                                    sock.close()
+
+                            if (recv_data == START_PULSE_ANALYSIS):
+                                print('Pulse Analysis Command')
+                                Pulse_Analysis_Flag = True
+                                TOA = np.empty(0,dtype = 'u4')
+                                ###### Pulse Analysis Command to be sent to Pulse Analyser
+                                #sock_pulse_analyser.send(b'Start Pulse Analysis Command Received\n\r')
+                            if (recv_data == CAPTURE_PDW):
+                                print('Capture PDW Command')
+                                sock_pulse_analyser.send(b'Capture PDW Command Received\n\r')
+                                #text =  (len(data.inb)).to_bytes(4, byteorder="big", signed=False)
+                                #sock.send(bytes(text))
+                        else:
+                            print('closing connection to', data.addr)
+                            if(data.addr == IP_PulseAnalyser):
+                                PulseAnalyser_Client_Conn_Status = False
+                                Pulse_Analysis_Flag = False
+                                print('PulseAnalyser_Client_Conn_Status',PulseAnalyser_Client_Conn_Status)
+                            elif (data.addr == GUI_IPAddr):
+                                GUI_Client_Conn_Status = False
+                                Pulse_Analysis_Flag = False
+                                print('GUI_Client_Conn_Status',GUI_Client_Conn_Status)
+                            sel.unregister(sock)
+                            sock.close()
+
+        except:
+            print('If Error')
+            print(key.fileobj)
+            s1 = key.fileobj
+            sel.unregister(s1)
+            s1.close()
+            print('Socket Closed')
+        #('closing Socket')
+sel.unregister(lsock)
+lsock.close()
 #######################################################################################################################
