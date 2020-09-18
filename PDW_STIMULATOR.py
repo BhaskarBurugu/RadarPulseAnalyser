@@ -123,7 +123,6 @@ def Build_jittered_PRI_DataSet(pri_value):
     #print(DTOA_Raw)
     DTOA = Generate_DTOA(TOA=TOA)
     return DTOA
-
 ########################################################################################################################
 def Generate_TOA(Pri_Category):
     if(Pri_Category == 'CONSTANT'):
@@ -192,7 +191,7 @@ class Window(QtWidgets.QMainWindow):
         self.combo_Box.setCurrentIndex(0)
         self.push_button.clicked.connect(self.SendPdw)
 ########################################################################################################################
-    def SendPdw(self):
+    def SendPdw(self, bytes_array=None):
         time.sleep(0.1)
         SignalType = self.combo_Box.currentIndex()
         time.sleep(0.1)
@@ -208,8 +207,11 @@ class Window(QtWidgets.QMainWindow):
             signal = 'JITTER'
         PDW2 = Generate_TOA(signal)
       #  print('############PDW2\n',PDW2)
-        PDW1 = np.linspace(start=1,stop=len(PDW2),num = len(PDW2),endpoint=True,dtype ='u4')
-       # print('#####PDW1\n',PDW1)
+       # PDW1 = np.array(dtype= '>u4')
+        #PDW1 = np.linspace(start=1,stop=len(PDW2),num = len(PDW2),endpoint=True,dtype ='>u4')
+        PDW1 = [0x1300A2 for _ in range (len(PDW2))]
+        print('#####PDW1\n',PDW1)
+
         PDW = np.array(np.column_stack([PDW1, PDW2]).tolist(), dtype = '>u4')
         #y = np.array(x,  dtype='>u4')    #'>u4' is big Endian
         #x = np.array([[3, 1], [2, 3]], dtype='>u4')

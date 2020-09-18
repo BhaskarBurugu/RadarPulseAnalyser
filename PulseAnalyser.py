@@ -160,17 +160,25 @@ def Get_StaggerPRI_from_Cluster(x,no_of_clusters):
 #######################################################################################################################
 def Extract_PDW(bytes_array):
     length = int(len(bytes_array)/(4*2))
-    PDW1 = np.empty(length, dtype = 'u4')
-    PDW2 = np.empty(length, dtype = 'u4')
+    PulseWidth = np.empty(length, dtype = 'u4')
+    PulseAmpl = np.empty(length, dtype = 'u4')
+    DTOA = np.empty(length, dtype = 'u4')
+
     for i in range(length):
-        Lower_Word =  bytes_array[(i*8):(i*8)+4]
+        #Lower_Word =  bytes_array[(i*8):(i*8)+4]
+        PW_Array = bytes_array[(i*8):(i*8)+2]
+        PA_Array = bytes_array[(i*8)+3:(i*8)+4]
+
         Upper_Word =  bytes_array[(i*8)+4:(i*8)+8]
-        Lower_Word = int.from_bytes(Lower_Word, byteorder='big',signed=False)
+        PW = int.from_bytes(PW_Array,byteorder='big',signed=False)
+        PA = int.from_bytes(PA_Array,byteorder='big',signed=False)
+        #Lower_Word = int.from_bytes(Lower_Word, byteorder='big',signed=False)
         Upper_Word = int.from_bytes(Upper_Word, byteorder='big',signed=False)
         #print(number)
-        PDW1[i] = Lower_Word
-        PDW2[i] = Upper_Word
-    return PDW1, PDW2    
+        PulseWidth[i] = PW
+        PulseAmpl[i] = PA
+        DTOA[i] = Upper_Word
+    return PulseWidth, PulseAmpl, DTOA
 #######################################################################################################################
 #Load the model in memory
 model = tf.keras.models.load_model('pulseanalyser_1000_01_09_20.h5')
@@ -257,19 +265,55 @@ while True:
                                     #if(CmdByte == b'\xf0'):   #PDWs Start of Byte
                                     if(Pulse_Analysis_Flag == True):
                                         #print('Length of PDWs',int(len(recv_data)/(4*2)))
-                                        PDW1, PDW2 = Extract_PDW(recv_data[1:])
-                                        TOA = np.concatenate((TOA,PDW2),axis = 0)
-                                        if(TOA.shape[0] >= 300):
-                                            RAW_DTOA = np.empty(TOA.shape[0]-1)
-                                            RAW_DTOA = TOA
-                                            DTOA, xx = removeOutliers(RAW_DTOA,1,15,85)
+                                        PW, PA, D_TOA = Extract_PDW(recv_data[1:])
+                                        RAW_DTOA = np.concatenate((RAW_DTOA,D_TOA),axis = 0)
+                                        PulseWidth = np.concatenate((PulseWidth, PW), axis=0)
+                                        PulseAmpl = np.concatenate((PulseAmpl, PA), axis=0)
 
+
+                                        if(RAW_DTOA.shape[0] >= 300):
+                                           # RAW_DTOA = np.empty(TOA.shape[0]-1)
+                                            #RAW_DTOA = TOA
+
+                                            DTOA, xx = removeOutliers(RAW_DTOA,1,15,85)
                                             if(len(DTOA) > 1000):
                                                 DataSet = np.array(DTOA[0:1000], dtype = 'u4')
                                                 TrackData = ClassifyPRI(model,DataSet)
                                                 GUI_sock.send(TrackData)
+                                               # TOA = np.empty(0,dtype='u4')
+                                                TOA = []
+                                                TOA.append(0)
+                                                for i in range(1,1000):
+                                                    TOA.append(TOA[i-1] + DTOA[i-1])
+
+                                                print(len(PulseWidth), PulseAmpl)
+                                                print(len(PulseWidth), PulseWidth)
+                                                print(len(RAW_DTOA))
+                                                pdwdata = []
+                                                for i in range (1000):
+                                                    pdwdata.append([PulseWidth[i],PulseAmpl[i],DTOA[i],TOA[i]])
+                                                #data1 = np.array([PulseWidth[0:1000],PulseAmpl[0:1000],RAW_DTOA[0:1000]])
+                                                #print(pdwdata)
+                                                try :
+                                                    df = pd.DataFrame(data=pdwdata, columns=['PW','PA','DTOA','TOA'])
+                                                    #df['PW1'] = PulseWidth
+                                                    #df = pd.DataFrame(data1,columns=['PW', 'PA', 'DTOA'])
+                                                    print(df)
+                                                    df.to_csv('pdw.csv')
+                                                except:
+                                                    print('Error')
+                                               # df['PW'] = list(PulseWidth)
+                                               # print(df)
+                                             #   df['PA'] = PulseAmpl
+                                              #  df['DTOA'] = RAW_DTOA
+                                             #   print(df.head())
+                                            #    df['TOA'] = TOA
+                                              #  df.to_csv('pdw.csv')
+
+                                               # print(len(TOA))
+
                                                 print('PRI Category is',TrackData)
-                                                TOA = np.empty(0,dtype = 'u4')
+                                                RAW_DTOA = np.empty(0,dtype = 'u4')
                             else:
                                 print('######  GUI Link Down  #######\n')
 
@@ -297,7 +341,11 @@ while True:
                             if (recv_data == START_PULSE_ANALYSIS):
                                 print('Pulse Analysis Command')
                                 Pulse_Analysis_Flag = True
-                                TOA = np.empty(0,dtype = 'u4')
+                               # Pulse_Analysis_Flag = False
+                                RAW_DTOA = np.empty(0,dtype = 'u4')
+                                PulseWidth = np.empty(0,dtype='u4')
+                                PulseAmpl = np.empty(0,dtype='u4')
+
                                 ###### Pulse Analysis Command to be sent to Pulse Analyser
                                 #sock_pulse_analyser.send(b'Start Pulse Analysis Command Received\n\r')
                             if (recv_data == CAPTURE_PDW):
@@ -317,7 +365,6 @@ while True:
                                 print('GUI_Client_Conn_Status',GUI_Client_Conn_Status)
                             sel.unregister(sock)
                             sock.close()
-
         except:
             print('If Error')
             print(key.fileobj)
