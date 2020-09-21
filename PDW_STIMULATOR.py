@@ -46,7 +46,7 @@ def Generate_Constant_PRI(pri):
     return DTOA
 ########################################################################################################################
 SEQ_LENGTH = 5000
-def Generate_Stagger_PRI(pri_value, stagger_level):
+def Generate_Stagger_PRIi(pri_value, stagger_level):
     # Value to be entered in the range of 0 to 1 i.e 0, 0.1, 0.2, 0.3 etc
     min_pri = pri_value
     max_pri = pri_value * 1.4
@@ -84,25 +84,52 @@ def Generate_Stagger_PRI(pri_value, stagger_level):
    # print('@@@TOA Len',len(TOA))
     DTOA = Generate_DTOA(TOA=TOA)
     return DTOA
-#######################################################################################################################
-def Build_jittered_PRI_DataSet(pri_value):
+
+
+def Generate_Stagger_PRI(pri_value, stagger_level):
     # value to to be entered in the range of 100 to 30000
-    min_pri = pri_value * 0.90
-    max_pri = pri_value * 1.1
-    #print('Jittered PRI')
-    input_pri = np.random.uniform(min_pri, max_pri, 600)
-    print('Min PRI ',input_pri.min())
-    print('Max PRI ', input_pri.max())
+    # pri_value = pri_value * 1000
+    min_pri = int(pri_value)
+    # max_pri = int(pri_value * 1.5)
+    if (min_pri < 500):
+        max_pri = int(pri_value * 1.3)
+    if (min_pri >= 500) and (min_pri < 2000):
+        max_pri = int(pri_value * 1.4)
+    if (min_pri >= 2000):
+        max_pri = pri_value + 1500
+
+    if (min_pri < 500):
+        min_distance = 5
+    else:
+        min_distance = 10
+    #  input_pri = []
+    #  input_pri.append(pri_value)
+    #   for i in range(stagger_level-1):
+    #       input_pri.append(round(random.uniform(min_pri,max_pri),3))
+    # input_pri = np.random.randint(min_pri,max_pri,stagger_level)
+    input_pri = [min_distance * i + x for i, x in
+                 enumerate(sorted(random.sample(range(min_pri, max_pri), stagger_level)))]
+    print('Stagger Level',stagger_level)
+    print(input_pri)
+    # input_pri.sort(False)
+    # print(input_pri)
+    # input_pri.append(pri_value)  #chane here
+    # input_pri.append(1500)
+   # input_pri = [x  for x in input_pri]
+
     # value to be entered in the range of 0 to 20
-    percentage_of_missing_pulses = randint(0, 0.0)  # 5
+    percentage_of_missing_pulses = randint(0, 15)  # 5
+
     # Value to be entered in the range of 0 to 1 i.e 0, 0.1, 0.2, 0.3 etc
     Noise_Std_Deviation = round(random.uniform(0.0, 0.9), 3)  # 1
+
+    # do not change values from here
     sequence_length = 3000
+
     Noise_Signal = np.random.normal(0, Noise_Std_Deviation, sequence_length)
     TOA = np.empty(sequence_length)
     i = 1
-    TOA = np.empty(SEQ_LENGTH, dtype='u4')
-    TOA[0] = randint(0, 100000) #+ Noise_Signal[0]
+    TOA[0] = 0
     while (i < sequence_length - 2):
         for j in range(0, len(input_pri)):
             TOA[i + j] = TOA[i + j - 1] + input_pri[j] + Noise_Signal[i + j]
@@ -111,35 +138,68 @@ def Build_jittered_PRI_DataSet(pri_value):
                 break
             # print([i+j])
         i = i + len(input_pri)
-  #  print('Jittered PRI')
-    Count_of_dropped_pulses = int(percentage_of_missing_pulses * sequence_length )
+        # TOA = TOA + Noise_Signal
+    # TOA = np.round(TOA,2)
+
+    # Count_of_dropped_pulses = int(percentage_of_missing_pulses * 1000 /100)
+    # Count_of_dropped_pulses
+    Count_of_dropped_pulses = int(percentage_of_missing_pulses * sequence_length / 100)
     drop_list_index = np.random.randint(0, sequence_length - 10, Count_of_dropped_pulses)
     #  .sort(True)
     drop_list_index = np.sort(drop_list_index)[::-1]
     for i in drop_list_index:
         TOA = np.delete(TOA, i)
 
-   # print('Jittered PRI End')
-    #print(DTOA_Raw)
     DTOA = Generate_DTOA(TOA=TOA)
     return DTOA
+
+
+#######################################################################################################################
+def Build_jittered_PRI_DataSet(pri_value):
+    # value to to be entered in the range of 100 to 30000
+    min_pri = pri_value * 0.85
+    max_pri = pri_value * 1.15
+    input_pri = np.random.uniform(min_pri, max_pri, 600)
+
+    # Value to be entered in the range of 0 to 1 i.e 0, 0.1, 0.2, 0.3 etc
+    Noise_Std_Deviation = round(random.uniform(0.0, 0.9), 3)  # 1
+
+    sequence_length = 30000
+
+    Noise_Signal = np.random.normal(0, Noise_Std_Deviation, sequence_length)
+    TOA = np.empty(sequence_length)
+
+    i = 1
+    TOA[0] = 0
+    while (i < sequence_length - 2):
+        for j in range(0, len(input_pri)):
+            TOA[i + j] = TOA[i + j - 1] + input_pri[j] + Noise_Signal[i + j]
+            TOA[i + j] = np.round(TOA[i + j], 2)
+            if ((i + j) > (sequence_length - 2)):
+                break
+            # print([i+j])
+        i = i + len(input_pri)
+    DTOA = Generate_DTOA(TOA=TOA)
+    return DTOA
+    #return TOA
 ########################################################################################################################
-def Generate_TOA(Pri_Category):
+def Generate_PDW2(Pri_Category):
     if(Pri_Category == 'CONSTANT'):
         pri = randint(100,10000)  #pri 100us to 5000us
         print('Pri is',pri)
-        TOA = Generate_Constant_PRI(pri)
+        DTOA = Generate_Constant_PRI(pri)
        # print('######## TOA ######\n',TOA)
     elif(Pri_Category == 'STAGGER'):
         pri = randint(100,10000)  #pri 100us to 5000us
         #print('Pri is',pri/10)
-        TOA = Generate_Stagger_PRI(pri,randint(2,8))
+        DTOA = Generate_Stagger_PRI(pri,randint(2,8))
     elif(Pri_Category == 'JITTER'):
         pri = randint(100,10000)  #pri 100us to 5000us
         print('Pri is',pri)
-        TOA = Build_jittered_PRI_DataSet(pri)
-        #print('Pri is',pri/10)
-    return TOA
+        DTOA = Build_jittered_PRI_DataSet(pri)
+        print('Min Pri is',min(DTOA))
+        print('Min Pri is',max(DTOA))
+    return DTOA
 ########################################################################################################################
 def send_pdws(msg):
     # Define the port on which you want to connect
@@ -205,13 +265,13 @@ class Window(QtWidgets.QMainWindow):
         elif SignalType == 2 :
             print('Jitter PRI')
             signal = 'JITTER'
-        PDW2 = Generate_TOA(signal)
+        PDW2 = Generate_PDW2(signal)
       #  print('############PDW2\n',PDW2)
        # PDW1 = np.array(dtype= '>u4')
         #PDW1 = np.linspace(start=1,stop=len(PDW2),num = len(PDW2),endpoint=True,dtype ='>u4')
         PDW1 = [0x1300A2 for _ in range (len(PDW2))]
-        print('#####PDW1\n',PDW1)
-
+      #  print('#####PDW1\n',PDW1)
+        PDW2 = [x * 10 for x in PDW2]
         PDW = np.array(np.column_stack([PDW1, PDW2]).tolist(), dtype = '>u4')
         #y = np.array(x,  dtype='>u4')    #'>u4' is big Endian
         #x = np.array([[3, 1], [2, 3]], dtype='>u4')

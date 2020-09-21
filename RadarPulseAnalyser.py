@@ -108,15 +108,15 @@ def ClassifyPRI(model, DTOA):
                         "Min PRI"          : 123,
                         "Max PRI"          : 124
                         }
-    dataset = DTOA
+    dataset = DTOA/10
     dataset = np.expand_dims(dataset, axis=0)
     dataset = np.expand_dims(dataset, axis=0)
-    dataset = dataset
+   # dataset = dataset
     y_pred_ohe = model.predict(dataset)
     print('Clasification Quality',np.max(y_pred_ohe[0])*100)
     Signal_Category = np.argmax(y_pred_ohe[0])
   #  print('Signal Category is',Category[Signal_Category])
-    y = np.delete(y_pred_ohe[0],np.argmax(y_pred_ohe[0]))
+   # y = np.delete(y_pred_ohe[0],np.argmax(y_pred_ohe[0]))
   #  print('@@@@@@@',y_pred_ohe[0])
   #  print('##########',np.max(y))
 
@@ -126,16 +126,21 @@ def ClassifyPRI(model, DTOA):
     TrackData = bytearray(0)
     TrackData = b'\xF5'
     if(Signal_Category == 0):  # Constant PRI
-        PRI = np.array(DTOA.mean()*1000,dtype= '>u4')
+        DTOA_Filt,r = removeOutliers(DTOA, 1, 25, 75)
+        DTOA_np = np.array(DTOA_Filt,dtype= '>u4')
+        PRI = "{:.2f}".format(DTOA_np.mean()/10)
         #TrackData = TrackData + (Target_Category['Constant_PRI']).to_bytes(1, byteorder='big')
         #TrackData = TrackData + PRI.tobytes()
       #  print('Constant_PRI(us)',PRI/1000)
         TrackDataInfo['Signal Category'] = 'STABLE'
-        TrackDataInfo['PRI'][0] = PRI/1000
+        TrackDataInfo['PRI'][0] = PRI
     elif (Signal_Category == 1):  # Jittered PRI
-        PRI = np.array(DTOA.mean()*1000,dtype= '>u4')
-        PRI_min = np.array(DTOA.min()*1000,dtype= '>u4')
-        PRI_max = np.array(DTOA.max()*1000,dtype= '>u4')
+        print('###JITTER####')
+        DTOA_Filt, r = removeOutliers(DTOA, 1, 25, 75)
+        DTOA_np = np.array(DTOA_Filt,dtype= '>u4')
+        PRI = "{:.2f}".format(DTOA_np.mean()/10)
+        PRI_min = "{:.2f}".format(DTOA_np.min()/10)
+        PRI_max = "{:.2f}".format(DTOA_np.max()/10)
       #  print('Jittered_PRI(us)',PRI/1000)
      #   print('Min PRI(us)',PRI_min/1000)
       #  print('Max PRI(us)',PRI_max/1000)
@@ -146,9 +151,9 @@ def ClassifyPRI(model, DTOA):
 
 
         TrackDataInfo['Signal Category'] = 'JITTER'
-        TrackDataInfo['PRI'][0] = PRI/1000
-        TrackDataInfo['Min PRI'][0] = PRI_min /1000
-        TrackDataInfo['Max PRI'][0] = PRI_max / 1000
+        TrackDataInfo['PRI'][0] = PRI
+        TrackDataInfo['Min PRI'] = PRI_min
+        TrackDataInfo['Max PRI'] = PRI_max
 
     else :     # Staggered PRI
        # print('Staggered PRI')
@@ -159,8 +164,8 @@ def ClassifyPRI(model, DTOA):
       #      PRI = np.array(PRI*1000,dtype= '>u4')
       #      TrackData = TrackData + PRI.tobytes()
 
-        TrackDataInfo['Signal Category'] = 'STAGGER'
-        TrackDataInfo['PRI'] = Stag_PRI
+        TrackDataInfo['Signal Category'] = Category[Signal_Category] #'STAGGER'
+        TrackDataInfo['PRI'] = ["{:.2f}".format(x/10) for x in Stag_PRI]
 
    # print(DTOA[0:10])
   #  Plot_DTOA(DTOA,100)
@@ -301,6 +306,7 @@ class MyThread(QThread):
                                                 if (len(DTOA) > 1000):
                                                     DataSet = np.array(DTOA[0:1000], dtype='u4')
                                                     TrackData = ClassifyPRI(model, DataSet)
+
                                                   #  print(TrackData)
                                                    # GUI_sock.send(TrackData)
                                                     self.Track_Update.emit(TrackData)
