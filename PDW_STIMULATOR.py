@@ -18,6 +18,7 @@ def Generate_DTOA(TOA):
   #  print(RAW_DTOA)
     return RAW_DTOA
 ########################################################################################################################
+SEQ_LENGTH = 3000
 def Generate_Constant_PRI(pri):
     # Value to be entered in the range of 0 to 1 i.e 0, 0.1, 0.2, 0.3 etc
     # pri = pri
@@ -45,45 +46,6 @@ def Generate_Constant_PRI(pri):
     DTOA = Generate_DTOA(TOA=TOA)
     return DTOA
 ########################################################################################################################
-SEQ_LENGTH = 5000
-def Generate_Stagger_PRIi(pri_value, stagger_level):
-    # Value to be entered in the range of 0 to 1 i.e 0, 0.1, 0.2, 0.3 etc
-    min_pri = pri_value
-    max_pri = pri_value * 1.4
-    if (min_pri > 1000):
-        max_pri = pri_value + 1000
-    input_pri = []
-    input_pri.append(pri_value)
-    for i in range(stagger_level - 1):
-        input_pri.append(round(random.uniform(min_pri, max_pri), 3))
-    input_pri.sort(reverse=False)
-    #input_pri = [6991, 7098.943, 7117.701, 7389.569, 7570.652, 7619.157]
-    print('Pri are(us)', input_pri)
-    Noise_Std_Deviation = random.uniform(0.0, 0.9)
-    print('Standard Deviation', Noise_Std_Deviation)
-    Noise_Signal = np.random.normal(0, Noise_Std_Deviation, SEQ_LENGTH)
-    print(max(Noise_Signal))
-    TOA = np.empty(SEQ_LENGTH, dtype='u4')
-    TOA[0] = randint(0, 100000) #+ Noise_Signal[0]
-    i = 0
-    while (i < SEQ_LENGTH - 2):
-        for j in range(0, len(input_pri)):
-            TOA[i + j] = TOA[i + j - 1] + input_pri[j]  + Noise_Signal[i + j]
-            if ((i + j) > (SEQ_LENGTH - 2)):
-                break
-        i = i + len(input_pri)
-        # value to be entered in the range of 0 to 20
-    percentage_of_missing_pulses =  random.uniform(0.0,0.15) #5
-    print(f'Missing Pulses {percentage_of_missing_pulses*100}%')
-    Count_of_dropped_pulses = int(percentage_of_missing_pulses * SEQ_LENGTH)
-    index = np.random.randint(0, SEQ_LENGTH, Count_of_dropped_pulses)
-    index = np.sort(index)[::-1]
-    print(len(index))
-    for i in index:
-        TOA = np.delete(TOA, i)
-   # print('@@@TOA Len',len(TOA))
-    DTOA = Generate_DTOA(TOA=TOA)
-    return DTOA
 
 ########################################################################################################
 def Generate_Stagger_PRI(pri_value, stagger_level):
@@ -153,7 +115,6 @@ def Generate_Stagger_PRI(pri_value, stagger_level):
     DTOA = Generate_DTOA(TOA=TOA)
     return DTOA
 
-
 #######################################################################################################################
 def Build_jittered_PRI_DataSet(pri_value):
     # value to to be entered in the range of 100 to 30000
@@ -161,10 +122,11 @@ def Build_jittered_PRI_DataSet(pri_value):
     max_pri = pri_value * 1.15
    # input_pri = np.random.uniform(min_pri, max_pri, 600)
     seed = np.random.randint(5, 30)
-    input_pri = [pri_value + seed * np.random.random() for _ in range(200)]
+    #input_pri = [pri_value + seed * np.random.random() for _ in range(200)]
+    input_pri = np.random.normal(pri_value, seed, 200)
     # Value to be entered in the range of 0 to 1 i.e 0, 0.1, 0.2, 0.3 etc
     print('Deviation %=',seed)
-    sequence_length = 30000
+    sequence_length = 3000
     TOA = np.empty(sequence_length)
 
     i = 1
@@ -210,7 +172,9 @@ def send_pdws(msg):
     s.connect(('localhost', port))
     s.send(b'PulseAnalyser')
     time.sleep(1)
-    for i in tqdm(range(0, 10)):
+    loopcount = int(len(msg) / (8*50))
+    print('LOOp COUNT',loopcount)
+    for i in tqdm(range(0,loopcount)):
         index = i * 4 * 2 * 50
         bytes_to_send = b'\xf0' + msg[index: index + 4 * 2 * 50]
         # print(bytes_to_send)
@@ -220,7 +184,7 @@ def send_pdws(msg):
         # print('Start Index',Start_Index)
         s.send(bytes_to_send)
         # print("Printed immediately.")
-        time.sleep(0.3)
+        time.sleep(0.1)
     time.sleep(3)
     s.close()
 ########################################################################################################################

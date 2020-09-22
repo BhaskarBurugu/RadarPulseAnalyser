@@ -1,14 +1,53 @@
 #############################################################################################################
 import sys
 from PyQt5 import QtGui
-from PyQt5.QtCore import QRect
+from PyQt5.QtCore import QRect, QTimer
 from PyQt5.QtCore import QThread, pyqtSignal
-from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton,QTextEdit
+from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton, QTextEdit, QTableWidgetItem, QTableWidget, QToolBar, \
+    QHeaderView, QAction
 import socket
 import selectors
 import types
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.cluster import KMeans
+#######################################################################################################################
+def Plot_DTOA_Hist(DTOA):
+    DTOA = [x / 10 for x in DTOA if (x < min(DTOA) * 2) and x > 100]
+    Min_PRI = 100  # MIN PRI 100 us
+    Max_PRI = 10000  # Max PRI 10msec = 10,000
+    if int(min(DTOA) * 0.01) >= 5:
+        Bin_Width = 5
+    elif int(min(DTOA) * 0.01) <= 0:
+        Bin_Width = 1
+    else:
+        Bin_Width = int(min(DTOA) * 0.01)
+    # Bin_Width = 5 if int(min(PRI) * 0.01) >=5 else int(min(PRI) * 0.01)# 2us
+    #print('###BIN Width', Bin_Width)
+    Number_of_bins = (Max_PRI - Min_PRI) / Bin_Width
+   # frq, edges = np.histogram(DTOA, bins=int(Number_of_bins), range=(Min_PRI, Max_PRI))
+    frq, edges = np.histogram(DTOA, bins=int(Number_of_bins))
+    #frq, edges = np.histogram(x, bins = 2000)
+    fig, ax = plt.subplots()
+    ax.bar(edges[:-1], frq, width=np.diff(edges), edgecolor="black", align="edge")
+    plt.show()
+#######################################################################################################################
+def Plot_DTOA(DTOA,x_lim2):
+    DTOA = np.array([x / 10 for x in DTOA if (x < min(DTOA) * 2) and x > 100])
+    if(x_lim2 == 0):
+        x_lim2 = 100
+    x = [*range(0, DTOA.shape[0], 1)]
+   # plt.step(x,DTOA/DTOA.max())
+    plt.step(x, DTOA)
+    plt.title('DTOA vs Pulse Count')
+    plt.ylabel('DTOA (micro sec)')
+    plt.xlabel('Pulse Count->')
+    plt.xlim(0,x_lim2)
+    plt.ylim(DTOA.mean() * 0.70,DTOA.mean()*1.30)
+    plt.show()
+#######################################################################################################################
+
 #############################################################################################################
 def removeOutliers(x, outlierConstant,Low_Th,Upper_Th):
     #a = np.array(x)
@@ -36,7 +75,11 @@ def group(L):
     yield first, last # Yield the last group
 ###################################################################################################
 def GetPW(PW):
-    PW = [x * 10 for x in PW] # convert t0 nsec
+    PW = [x * 10 for x in PW if x>=2000] # convert t0 nsec
+    if len(PW) == 0:
+        PWStr = '<2us'
+        print('PW < 2us')
+        return PWStr
    # print(PW)
     Min_PW = 2000   # 2000 ns = 2us max PW is 100us
     Max_PW = 100000
@@ -48,10 +91,11 @@ def GetPW(PW):
     #mode =
    # print (freq)
     #print(edges)
+
     index = [i for i in range(len(freq)) if freq[i] >= np.max(freq) * 0.3]
   #  print(index)
     group_list = list(group(index))
-   # print(group_list)
+    #print(group_list)
     PW_List = []
     for count,ele in enumerate(group_list):
         print('Group',count,'LowerPW =',Min_PW + ele[0]*Bin_Width,'END PW=',Min_PW + (ele[1]+1)*Bin_Width)
@@ -59,10 +103,13 @@ def GetPW(PW):
        # nparray_PW = np.array([x for x in PW if (x >= edges[ele[0]]) and (x < edges[ele[1]+1])])
        # PW_filt, r = removeOutliers(nparray_PW, 1, 25, 75)
        # PW_List.append('{:.2f}'.format(np.mean(PW_filt)))
-
+    print('PW LISt',PW_List)
     #print(PW_List)
-    PW_List = [x/1000 for x in PW_List]
-    return PW_List
+    PWStr = ''
+    for PW in PW_List:
+        #PW_List = [x/1000 for x in PW_List]
+        PWStr =  PWStr + '{:.2f}'.format(PW/1000)
+    return PWStr
 #########################################################################################################
 def GetPRI(DTOA):
     DTOA = [x / 10 for x in DTOA if (x < min(DTOA) * 2) and x > 100]  # convert to usec and eliminate hormonics
@@ -112,12 +159,15 @@ def GetPRI(DTOA):
            # PRI_List[0] = '{:.2f}'.format(np.mean(DTOA_filt))
     else:
         PRI_Cat = 'STAGGER LEVEL ' + f'{len(PRI_List)}'
-
+    PRIStr = ''
+    for PRI in PRI_List:
+        #PW_List = [x/1000 for x in PW_List]
+        PRIStr =  PRIStr + f'{PRI}, '
     TrackDataInfo    = {
                         "Signal Category"  :   PRI_Cat,
-                        "Pulse Width"      :   [2],
+                        "Pulse Width"      :   '120',
                         "Pulse Amplitude"  :    20,
-                        "PRI"              :   PRI_List,
+                        "PRI"              :   PRIStr,#PRI_List,
                       #  'Std Dev'          :   np.std(DTOA),
                         "Scan Type"        :   "Lock-on",
                         "Scan Rate"        :   30,
@@ -152,8 +202,9 @@ def Extract_PDW(bytes_array):
 #################################################################################################################
 class MyThread(QThread):
     # Create a counter thread
-    pd_PDW_Update = pyqtSignal(pd.DataFrame)
-    Track_Update = pyqtSignal(dict)
+   # pd_PDW_Update = pyqtSignal(pd.DataFrame)
+   # Track_Update = pyqtSignal(dict)
+    updatePDW = pyqtSignal(bytes)
     ####################################################################################################################
     ####################################################################################################################
     def __init__(self):
@@ -269,31 +320,8 @@ class MyThread(QThread):
                                     if (recv_data[0] == 240):  # PDWs Start of Byte
                                         # if(CmdByte == b'\xf0'):   #PDWs Start of Byte
                                         if (self.StartPulseAnalysis == True):
-                                            # print('Length of PDWs',int(len(recv_data)/(4*2)))
-                                            PW, PA, D_TOA = Extract_PDW(recv_data[1:])
-                                            RAW_DTOA = np.concatenate((RAW_DTOA, D_TOA), axis=0)
-                                            PulseWidth = np.concatenate((PulseWidth, PW), axis=0)
-                                            PulseAmpl = np.concatenate((PulseAmpl, PA), axis=0)
-                                           # TrackData = GetPRI(RAW_DTOA)
-                                          #  print (GetPW(PulseWidth))
-                                          #  self.Track_Update.emit(TrackData)
-                                            TOA = []
-                                            TOA.append(0)
-                                            for i in range(1, len(RAW_DTOA)):
-                                                TOA.append(TOA[i - 1] + RAW_DTOA[i - 1])
-                                            pdwdata = []
-                                           # for i in range(1000):
-                                           #     pdwdata.append([PulseWidth[i], PulseAmpl[i], RAW_DTOA[i], TOA[i]])
-                                            try:
-                                                df = pd.DataFrame(columns=['TOA','PW', 'PA', 'DTOA'])
-                                                df['PW']    = PulseWidth
-                                                df['PA']    = PulseAmpl
-                                                df['DTOA']  = RAW_DTOA
-                                                df['TOA']  = TOA
-                                            #    df.to_csv('pdw.csv')
-                                                self.pd_PDW_Update.emit(df)
-                                            except:
-                                                print('Error')
+                                            self.updatePDW.emit(recv_data)
+                                           # print('TYPE',type(recv_data))
                                 else:
                                     print('######  GUI Link Down  #######\n')
                                 if (recv_data == PULSEANALYSER):
@@ -331,7 +359,8 @@ class MyThread(QThread):
 class Window(QMainWindow):
     def __init__(self):
         super().__init__()
-        title = "Multi-Vibration Sensor Server- Version B0.2"
+        self.Title_list = ["PW", " PA ", "Signal\nCategory", "PRI", "PRI \n Min", "PRI \n Max", "Scan \n Type", "Scan \n Rate"]
+        title = "Radar Pulse Analyser"
         left = 500
         top = 300
         width = 800
@@ -346,39 +375,169 @@ class Window(QMainWindow):
         self.show()
       #  self.Text.append("Server Started")
         self.Server_Start()
+
     ###################################################################################################################
     def UiComponents(self):
+        self.toolbar = QToolBar(self)
+        self.toolbar.setMovable(False)
+        self.toolbar.setStyleSheet("background-color : white")
+        self.toolbar.setGeometry(QRect(0,0,800,60))
         self.Text = QTextEdit(self)
-        self.Text.move(0, 0)
-        self.Text.resize(800, 500)
-        self.button = QPushButton("Start Server", self)
+        self.Text.move(0, 500)
+        self.Text.resize(800, 100)
+        self.button = QPushButton("Start Pulse Analysis", self)
         self.button.move(150,150)
-        self.button.setGeometry(QRect(50,525,200,40))
-        self.button1 = QPushButton("Stop Server",self)
+        self.button.setGeometry(QRect(10,455,180,40))
+        self.button1 = QPushButton("Stop Pulse Analysis",self)
         self.button1.move(40,40)
-        self.button1.setGeometry(QRect(280,525,200,40))
+        self.button1.setGeometry(QRect(200,455,180,40))
         self.button2 = QPushButton("Clear",self)
         self.button2.move(50,50)
-        self.button2.setGeometry(QRect(510,525,200,40))
+        self.button2.setGeometry(QRect(390,455,180,40))
+        self.button3 = QPushButton("Save PDW",self)
+        self.button3.setGeometry(QRect(580,455,180,40))
+        self.ActplotDTOA = QAction("PLSCMT\nVS\nDTOA",self)
+        self.ActplotHistPRI = QAction("Histogram",self)
+        self.ActplotHistPW = QAction("PA\nVS\nDTOA",self)
+        self.toolbar.addAction(self.ActplotDTOA)
+        self.toolbar.addAction(self.ActplotHistPRI)
+        self.toolbar.addAction(self.ActplotHistPW)
+
+        self.tableWidget = QTableWidget(self)
+        self.tableWidget.setGeometry(QRect(10, 60, 775, 380))
+        font = QtGui.QFont()
+        font.setBold(True)
+        font.setPointSize(9)
+        font.setItalic(True)
+        font.setWeight(75)
+        self.tableWidget.setFont(font)
+        self.tableWidget.setObjectName("tableWidget")
+        self.tableWidget.setColumnCount(8)
+        self.tableWidget.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.tableWidget.setHorizontalHeaderLabels(self.Title_list)
+
         self.button.clicked.connect(self.Server_Start)
         self.button1.clicked.connect(self.Server_Stop)
         self.button2.clicked.connect(self.Clear)
+        self.button3.clicked.connect(self.savePDW)
+
+        self.ActplotDTOA.triggered.connect(self.plotDTOA)
+        self.ActplotHistPRI.triggered.connect(self.plotHistPRI)
+        self.ActplotHistPW.triggered.connect(self.plotHistPW)
+
         self.button.setEnabled(False)
+        self.CurRowInd = 0
         self.thread = MyThread()
        # self.thread.change_value.connect(self.setProgressVal)
         self.thread.StopFlag = False
         self.thread.start()
         self.thread.StartPulseAnalysis = False
-        self.thread.pd_PDW_Update.connect(self.updateGraphs)
-        self.thread.Track_Update.connect(self.updateTrackTable)
+       # self.thread.pd_PDW_Update.connect(self.updateGraphs)
+       # self.thread.Track_Update.connect(self.updateTrackTable)
+        self.thread.updatePDW.connect(self.ExtractPDW)
+        self.RAW_DTOA = np.empty(0, dtype='u4')
+        self.PulseWidth = np.empty(0, dtype='u4')
+        self.PulseAmpl = np.empty(0, dtype='u4')
+        self.PDWUpdateFlag = False
+        self.timer = QTimer(self)
+        #self.timer = 2000
+       # self.timer.timeout(2000)
+        self.timer.timeout.connect(self.ExtractPulseParam)
+        ############################################################################################################
+
+    def plotDTOA(self):
+        if self.SignalType == 'JITTER' :
+            Plot_DTOA(self.RAW_DTOA,x_lim2=500)
+        else :
+            Plot_DTOA(self.RAW_DTOA, x_lim2=100)
+
+    def plotHistPRI(self):
+        Plot_DTOA_Hist(self.RAW_DTOA)
+
+    def plotHistPW(self):
+        Plot_DTOA_Hist(self.PulseWidth)
+
+    def ExtractPDW(self,recv_data):
+       # self.Text.append('Extract PDW')
+        PW, PA, D_TOA = Extract_PDW(recv_data[1:])
+        self.RAW_DTOA = np.concatenate((self.RAW_DTOA, D_TOA), axis=0)
+        self.PulseWidth = np.concatenate((self.PulseWidth, PW), axis=0)
+        self.PulseAmpl = np.concatenate((self.PulseAmpl, PA), axis=0)
+        self.PDWUpdateFlag = True
+#####################################################################################################################
+    def ExtractPulseParam(self):
+        self.Text.append('Pulse Count'+ str(len(self.RAW_DTOA)))
+       # self.CurRowInd = self.tableWidget.rowCount()
+       # self.tableWidget.setRowCount(self.CurRowInd+1)
+        if self.PDWUpdateFlag == True:
+            try:
+                self.tableWidget.setRowCount(self.CurRowInd + 1)
+               # self.CurRowInd = 1
+                if len(self.RAW_DTOA > 1000):
+                    TrackData = GetPRI(self.RAW_DTOA[-1000:])
+                    TrackData['Pulse Width'] = GetPW(self.PulseWidth[-1000:])
+                else:
+                    TrackData = GetPRI(self.RAW_DTOA)
+                    TrackData['Pulse Width'] = GetPW(self.PulseWidth)
+                print(TrackData)
+                self.SignalType =TrackData.get('Signal Category')
+                self.Text.clear()
+                self.Text.append(str(TrackData))
+                PW = f'''{TrackData['Pulse Width']}'''
+                PA = f'''{TrackData['Pulse Amplitude']}'''
+                PRI = f'''{TrackData['PRI']}'''
+                minPRI = f'''{TrackData['Min PRI']}'''
+                maxPRI = f'''{TrackData['Max PRI']}'''
+                ScanRate = f'''{TrackData['Scan Rate']}'''
+                self.tableWidget.setItem(self.CurRowInd, 0, QTableWidgetItem(PW))
+                self.tableWidget.setItem(self.CurRowInd, 1, QTableWidgetItem(PA))
+                self.tableWidget.setItem(self.CurRowInd, 2, QTableWidgetItem(TrackData.get('Signal Category')))
+                self.tableWidget.setItem(self.CurRowInd, 3, QTableWidgetItem(PRI))
+                self.tableWidget.setItem(self.CurRowInd, 4, QTableWidgetItem(minPRI))
+                self.tableWidget.setItem(self.CurRowInd, 5, QTableWidgetItem(maxPRI))
+                self.tableWidget.setItem(self.CurRowInd, 6, QTableWidgetItem(TrackData.get('Scan Type')))
+                self.tableWidget.setItem(self.CurRowInd, 7, QTableWidgetItem(ScanRate))
+                #  print (GetPW(PulseWidth))
+                #self.Track_Update.emit(TrackData)
+            except:
+                self.Text.append('No PDWs in Buffer')
+            self.PDWUpdateFlag = False
+        self.timer.start(2000)
+        #Munny Write here to insert into table TrackData
+        #self.savePDW()
+####################################################################################################################
+    def savePDW(self):
+        TOA = []
+        TOA.append(0)
+        for i in range(1, len(self.RAW_DTOA)):
+            TOA.append(TOA[i - 1] + self.RAW_DTOA[i - 1])
+        pdwdata = []
+        # for i in range(1000):
+        #     pdwdata.append([PulseWidth[i], PulseAmpl[i], RAW_DTOA[i], TOA[i]])
+        try:
+            df = pd.DataFrame(columns=['TOA', 'PW', 'PA', 'DTOA'])
+            df['PW'] = self.PulseWidth
+            df['PA'] = self.PulseAmpl
+            df['DTOA'] = self.RAW_DTOA
+            df['TOA'] = TOA
+            df.to_csv('pdw.csv')
+           # self.pd_PDW_Update.emit(df)
+        except:
+            print('Error')
 
     ###################################################################################################################
     def Server_Start(self):
+        self.Clear()
         self.Text.append("Pulse Analysis Started")
+        self.RAW_DTOA = np.empty(0, dtype='u4')
+        self.PulseWidth = np.empty(0, dtype='u4')
+        self.PulseAmpl = np.empty(0, dtype='u4')
+
         self.button.setEnabled(False)
         self.button1.setEnabled(True)
        # self.Text.append("Server Started")
         self.thread.StartPulseAnalysis = True
+        self.timer.start(2000)
     ###################################################################################################################
     def Server_Stop(self):
        # self.thread.StopFlag = True
@@ -388,8 +547,8 @@ class Window(QMainWindow):
         self.thread.StartPulseAnalysis = False
         #self.thread.exit()
        #self.ServerStopFlag = True
+        self.timer.stop()
     ###################################################################################################################
-
     def updateGraphs(self, df_Pdw):
         print('Update Graphs')
        # print(df_Pdw.head())

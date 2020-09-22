@@ -11,6 +11,7 @@ import pandas as pd
 import tensorflow as tf
 import matplotlib.pyplot as plt
 from sklearn.cluster import KMeans
+
 #######################################################################################################################
 def Plot_DTOA_Hist(x):
     frq, edges = np.histogram(x, bins = 2000)
@@ -53,6 +54,7 @@ def Extract_PDW(bytes_array):
     DTOA = np.empty(length, dtype = 'u4')
 
     for i in range(length):
+
         Lower_Word =  bytes_array[(i*8):(i*8)+4]
         PW_Array = bytes_array[(i*8):(i*8)+2]
         PA_Array = bytes_array[(i*8)+3:(i*8)+4]
