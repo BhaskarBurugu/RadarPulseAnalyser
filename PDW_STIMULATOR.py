@@ -85,7 +85,7 @@ def Generate_Stagger_PRIi(pri_value, stagger_level):
     DTOA = Generate_DTOA(TOA=TOA)
     return DTOA
 
-
+########################################################################################################
 def Generate_Stagger_PRI(pri_value, stagger_level):
     # value to to be entered in the range of 100 to 30000
     # pri_value = pri_value * 1000
@@ -159,21 +159,19 @@ def Build_jittered_PRI_DataSet(pri_value):
     # value to to be entered in the range of 100 to 30000
     min_pri = pri_value * 0.85
     max_pri = pri_value * 1.15
-    input_pri = np.random.uniform(min_pri, max_pri, 600)
-
+   # input_pri = np.random.uniform(min_pri, max_pri, 600)
+    seed = np.random.randint(5, 30)
+    input_pri = [pri_value + seed * np.random.random() for _ in range(200)]
     # Value to be entered in the range of 0 to 1 i.e 0, 0.1, 0.2, 0.3 etc
-    Noise_Std_Deviation = round(random.uniform(0.0, 0.9), 3)  # 1
-
+    print('Deviation %=',seed)
     sequence_length = 30000
-
-    Noise_Signal = np.random.normal(0, Noise_Std_Deviation, sequence_length)
     TOA = np.empty(sequence_length)
 
     i = 1
     TOA[0] = 0
     while (i < sequence_length - 2):
         for j in range(0, len(input_pri)):
-            TOA[i + j] = TOA[i + j - 1] + input_pri[j] + Noise_Signal[i + j]
+            TOA[i + j] = TOA[i + j - 1] + input_pri[j] #+ Noise_Signal[i + j]
             TOA[i + j] = np.round(TOA[i + j], 2)
             if ((i + j) > (sequence_length - 2)):
                 break
@@ -195,8 +193,9 @@ def Generate_PDW2(Pri_Category):
         DTOA = Generate_Stagger_PRI(pri,randint(2,8))
     elif(Pri_Category == 'JITTER'):
         pri = randint(100,10000)  #pri 100us to 5000us
-        print('Pri is',pri)
+
         DTOA = Build_jittered_PRI_DataSet(pri)
+        print('Pri is',np.mean(DTOA))
         print('Min Pri is',min(DTOA))
         print('Min Pri is',max(DTOA))
     return DTOA
@@ -211,7 +210,7 @@ def send_pdws(msg):
     s.connect(('localhost', port))
     s.send(b'PulseAnalyser')
     time.sleep(1)
-    for i in tqdm(range(0, 30)):
+    for i in tqdm(range(0, 10)):
         index = i * 4 * 2 * 50
         bytes_to_send = b'\xf0' + msg[index: index + 4 * 2 * 50]
         # print(bytes_to_send)
@@ -221,8 +220,8 @@ def send_pdws(msg):
         # print('Start Index',Start_Index)
         s.send(bytes_to_send)
         # print("Printed immediately.")
-        time.sleep(0.1)
-    time.sleep(1)
+        time.sleep(0.3)
+    time.sleep(3)
     s.close()
 ########################################################################################################################
 # print(str(self.combo_Box.currentIndex()))
